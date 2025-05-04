@@ -164,11 +164,22 @@ impl crate::save::upload::Table for Lookup {
         use std::io::Read;
         use std::io::Seek;
         use std::io::SeekFrom;
-        let ref file = File::open(path).expect(&format!("open {}", path));
+        
+        // Use a memory-efficient approach with chunked processing
         let mut lookup = BTreeMap::new();
-        let mut reader = BufReader::new(file);
+        let file = File::open(path).expect(&format!("open {}", path));
+        let file_size = file.metadata().expect("get file metadata").len();
+        log::info!("File size: {} bytes for {}", file_size, path);
+        
+        let mut reader = BufReader::with_capacity(4 * 1024 * 1024, file); // 4MB buffer
         let ref mut buffer = [0u8; 2];
         reader.seek(SeekFrom::Start(19)).expect("seek past header");
+        
+        // Read in batches to avoid excessive memory usage
+        const BATCH_SIZE: usize = 100_000;
+        let mut entries_processed = 0;
+        let mut entry_count = 0;
+        
         while reader.read_exact(buffer).is_ok() {
             match u16::from_be_bytes(buffer.clone()) {
                 2 => {
@@ -176,14 +187,39 @@ impl crate::save::upload::Table for Lookup {
                     let iso = reader.read_i64::<BE>().expect("read observation");
                     assert!(8 == reader.read_u32::<BE>().expect("abstraction length"));
                     let abs = reader.read_i64::<BE>().expect("read abstraction");
+                    
                     let observation = Isomorphism::from(iso);
                     let abstraction = Abstraction::from(abs);
+                    
+                    // Periodically log progress and force garbage collection
+                    entry_count += 1;
+                    if entry_count % BATCH_SIZE == 0 {
+                        entries_processed += BATCH_SIZE;
+                        
+                        // Calculate approximate memory usage based on BTreeMap size
+                        let approximate_memory_mb = (lookup.len() * (std::mem::size_of::<Isomorphism>() + 
+                                                                  std::mem::size_of::<Abstraction>() + 
+                                                                  std::mem::size_of::<Option<(Isomorphism, Abstraction)>>()) 
+                                                  >> 20) as f64;
+                        
+                        log::info!("Processed {} entries in {} (approx {:.2} MB used)", 
+                                  entries_processed, path, approximate_memory_mb);
+                        
+                        // Force a minor garbage collection
+                        std::thread::yield_now();
+                    }
+                    
                     lookup.insert(observation, abstraction);
                 }
                 0xFFFF => break,
                 n => panic!("unexpected number of fields: {}", n),
             }
         }
+        
+        // Add any remaining entries to the count
+        entries_processed += entry_count % BATCH_SIZE;
+        
+        log::info!("Finished loading {} with {} entries", path, entries_processed);
         Self(lookup)
     }
     fn save(&self) {

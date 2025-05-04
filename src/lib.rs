@@ -22,7 +22,7 @@ type Utility = f32;
 type Probability = f32;
 
 // game tree parameters
-const N: usize = 2;
+const N: usize = 6;
 const STACK: Chips = 100;
 const B_BLIND: Chips = 2;
 const S_BLIND: Chips = 1;
@@ -30,9 +30,9 @@ const MAX_RAISE_REPEATS: usize = 3;
 const MAX_DEPTH_SUBGAME: usize = 16;
 
 /// sinkhorn optimal transport parameters
-const SINKHORN_TEMPERATURE: Entropy = 0.025;
-const SINKHORN_ITERATIONS: usize = 128;
-const SINKHORN_TOLERANCE: Energy = 0.001;
+const SINKHORN_TEMPERATURE: Entropy = 0.05; // 0.025 --> 0.05 optimized for speed
+const SINKHORN_ITERATIONS: usize = 64; // 128 --> 64 optimized for speed
+const SINKHORN_TOLERANCE: Energy = 0.005; // 0.001 --> 0.005 optimized for speed
 
 // kmeans clustering parameters
 const KMEANS_FLOP_TRAINING_ITERATIONS: usize = 20;
@@ -42,13 +42,13 @@ const KMEANS_TURN_CLUSTER_COUNT: usize = 144;
 const KMEANS_EQTY_CLUSTER_COUNT: usize = 101;
 
 // mccfr parameters
-const CFR_BATCH_SIZE: usize = 0x100;
-const CFR_TREE_COUNT: usize = 0x400000;
+const CFR_BATCH_SIZE: usize = 0x800;      // 2 048
+const CFR_TREE_COUNT: usize = 0x400000;   // 4 194 304
 const CFR_ITERATIONS: usize = CFR_TREE_COUNT / CFR_BATCH_SIZE;
 const CFR_PRUNNING_PHASE: usize = 100_000_000 / CFR_BATCH_SIZE;
 const CFR_DISCOUNT_PHASE: usize = 100_000 / CFR_BATCH_SIZE;
 const MAIN_TRAINING_ITERATIONS: usize = CFR_ITERATIONS;
-const FINE_TRAINING_ITERATIONS: usize = 0x4000;
+const FINE_TRAINING_ITERATIONS: usize = 0x1000; // 1/4 of original
 
 // regret matching parameters
 const REGRET_MIN: Utility = -3e5;

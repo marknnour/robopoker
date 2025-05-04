@@ -128,13 +128,20 @@ impl Profile {
             .map(|(a, r)| (a, r.max(crate::POLICY_MIN)))
             .collect::<BTreeMap<Edge, Utility>>();
         let sum = regrets.values().sum::<Utility>();
-        let policy = regrets
-            .into_iter()
-            .map(|(a, r)| (a, r / sum))
-            .inspect(|(a, p)| log::trace!("{:16} ~ {:>5.03}", format!("{:?}", a), p))
-            .inspect(|(_, p)| assert!(*p >= 0.))
-            .inspect(|(_, p)| assert!(*p <= 1.))
-            .collect::<BTreeMap<Edge, Probability>>();
+        let policy = if sum <= 0. || sum.is_nan()  {
+            let n = regrets.len() as f32;
+            regrets.into_iter()
+                .map(|(a, _)| (a, Probability::from(1.0 / n)))
+                .collect()
+        } else {
+            regrets.into_iter()
+                .map(|(a, r)| (a, r / sum))
+                .map(|(a, p)| (a, p.max(0.0)))
+                .inspect(|(a, p)| log::trace!("{:16} ~ {:>5.03}", format!("{:?}", a), p))
+                .inspect(|(_, p)| assert!(*p >= 0.))
+                .inspect(|(_, p)| assert!(*p <= 1.))
+                .collect::<BTreeMap<Edge, Probability>>()
+        };
         policy
     }
 
@@ -276,13 +283,14 @@ impl Profile {
         assert!(infoset.node().player() == self.walker());
         let node = infoset.node();
         let bucket = node.bucket();
-        self.strategies
+        let raw_regret = self.strategies
             .get(bucket)
             .expect("bucket has been witnessed")
             .get(edge)
             .expect("action has been witnessed")
-            .regret()
-            / self.epochs() as Utility
+            .regret();
+        // Ensure we don't get negative values due to floating point precision
+        (raw_regret / self.epochs() as Utility).max(0.0)
     }
     /// conditional on being in this Infoset,
     /// distributed across all its head Nodes,
